@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>信奥训练助手</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5/lib/codemirror.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5/addon/edit/matchbrackets.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5/theme/dracula.css" />
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5/lib/codemirror.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5/mode/clike/clike.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5/addon/edit/matchbrackets.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5/addon/comment/comment.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui, sans-serif;}
+body{
+  background:#d2eceb;
+  padding:12px;
+  height:100vh;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.top-bar{
+  background:#fff;
+  border-radius:14px;
+  padding:14px 18px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.title{
+  font-size:20px;
+  color:#00b4af;
+  font-weight:bold;
+}
+.status-tag{
+  background:#e6f8f7;
+  color:#008985;
+  padding:6px 14px;
+  border-radius:999px;
+  font-size:14px;
+}
+.status-tag.offline{
+  background:#ffe9e9;
+  color:#b34444;
+}
+.btn{
+  padding:9px 18px;
+  border-radius:10px;
+  border:none;
+  font-size:15px;
+  cursor:pointer;
+}
+.btn-primary{
+  background:#00b4af;
+  color:white;
+}
+.btn-outline{
+  background:#fff;
+  color:#00b4af;
+  border:1px solid #00b4af;
+}
+.bar-row{
+  background:#fff;
+  border-radius:14px;
+  padding:12px 16px;
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+.bar-row input,.bar-row select{
+  padding:8px 10px;
+  border:1px solid #b2e2e0;
+  border-radius:8px;
+  background:#f0fafa;
+  font-size:14px;
+}
+.tag-wrap{
+  background:#fff;
+  border-radius:14px;
+  padding:12px 16px;
+  display:flex;
+  gap:10px;
+}
+.tag{
+  padding:8px 16px;
+  border-radius:999px;
+  background:#e6f8f7;
+  color:#008985;
+  cursor:pointer;
+  user-select:none;
+}
+.tag.active{
+  background:#00b4af;
+  color:#fff;
+}
+.main-grid{
+  flex:1;
+  display:grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap:10px;
+  min-height:0;
+}
+.panel{
+  background:#fff;
+  border-radius:14px;
+  padding:14px;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+.panel h4{
+  color:#00b4af;
+  margin-bottom:8px;
+}
+.content-box{
+  flex:1;
+  background:#f0fafa;
+  border:1px solid #b2e2e0;
+  border-radius:10px;
+  padding:12px;
+  overflow-y:auto;
+  white-space:pre-wrap;
+}
+.stage-hint{
+  background:#e6f8f7;
+  border-left:4px solid #00b4af;
+  padding:8px 12px;
+  border-radius:8px;
+  margin-bottom:10px;
+  color:#007774;
+  font-size:14px;
+}
+.CodeMirror{
+  flex:1;
+  border-radius:10px;
+  overflow:hidden;
+}
+.record-box{
+  background:#fff;
+  border-radius:14px;
+  padding:14px;
+}
+.record-item{
+  padding:6px 0;
+  border-bottom:1px dashed #b2e2e0;
+  color:#337;
+  font-size:14px;
+}
+</style>
+</head>
+<body>
+<div class="top-bar">
+  <div class="title">信奥训练助手</div>
+  <div id="ollamaStatus" class="status-tag">检测 Ollama...</div>
+  <div style="display:flex;gap:10px;">
+    <button class="btn btn-primary" id="sendBtn">发送当前阶段请求</button>
+    <button class="btn btn-outline" id="saveBtn">保存本题记录</button>
+  </div>
+</div>
+
+<div class="bar-row">
+  <input id="problemId" placeholder="题号" value="P1001">
+  <select id="sourceSel">
+    <option value="luogu">洛谷</option>
+    <option value="csp">CSP</option>
+    <option value="gesp">GESP</option>
+  </select>
+  <select id="diffSel">
+    <option value="easy">入门</option>
+    <option value="mid">普及</option>
+    <option value="hard">提高</option>
+  </select>
+  <input id="tagsInput" placeholder="知识点，逗号分隔">
+</div>
+
+<div class="tag-wrap" id="stepTags"></div>
+
+<div class="main-grid">
+  <div class="panel">
+    <h4>题干粘贴区</h4>
+    <div id="problemText" class="content-box" contenteditable="true">在这里粘贴题目描述、样例输入输出、数据范围...</div>
+  </div>
+
+  <div class="panel">
+    <h4>代码编辑器</h4>
+    <div id="stageHint" class="stage-hint">当前阶段：读题拆解 —— 帮读懂题意、标出陷阱，但不给解法</div>
+    <textarea id="codeEditor"></textarea>
+  </div>
+
+  <div class="panel">
+    <h4>AI 回答</h4>
+    <div id="aiOutput" class="content-box"></div>
+  </div>
+</div>
+
+<div class="record-box">
+  <h4 style="color:#00b4af;margin-bottom:8px;">做题记录</h4>
+  <div id="recordList"></div>
+</div>
+
+<script>
+const OLLAMA_URL = "http://127.0.0.1:11434/api/generate";
+const MODEL_NAME = "qwen2.5-coder:7b";
+
+const STEP_INFO = [
+  "读题拆解 —— 帮读懂题意、标出陷阱，但不给解法",
+  "算法分析 —— 对比可行方案，引导选出最优算法",
+  "代码框架 —— 搭建空白代码骨架，核心逻辑留白",
+  "代码评审 —— 提交孩子代码，指出逻辑/结构问题，启发修改",
+  "参考对比 —— 对照优秀AC代码，讲解差异",
+  "复盘总结 —— 沉淀解题套路、坑点、简短笔记",
+  "同类推荐 —— 给出洛谷同难度题号，过滤已做题目"
+];
+
+const SYSTEM_TEXT = "你是一名信奥竞赛教练，面向 GESP / CSP-J 的学生。严格按照阶段引导，禁止直接甩出完整AC代码，优先使用提问式启发引导学生自己发现问题。阶段顺序固定，学生没有完成当前阶段，绝不提前进入下一阶段。规则：1.【读题拆解】复述题意，标出数据范围、隐藏陷阱，抛出思考题，绝不透露解题方法。2.【算法分析阶段】学生给出自己的思路结果之后：先肯定合理部分；通过提问引导学生自查思路漏洞；对比2-3种可行方案，分析时间空间复杂度，引导学生选出最优算法，不要直接告诉正确算法。3.【代码框架阶段】学生写出自己框架后：先肯定做得好的地方；用提问找框架缺陷；指出边界、变量、循环等隐患；只在长时间卡壳时给出参考框架片段，不要直接贴完整正确代码。4.【代码评审阶段】学生提交完整代码：第一步先肯定代码优点；第二步定位问题，区分：思路错误/复杂度超时/边界bug（初值、下标、溢出、多组数据清空）；全部用提问引导修改，不直接输出修复后的完整代码。5.【参考对比阶段】给出规范竞赛AC代码，逐条对比学生代码差异，解释每种写法优劣。6.【复盘总结】提炼解题流程、高频坑点、简短记忆口诀。7.【同类推荐】给出洛谷题号，由易到难优先匹配相同知识点。学生跳阶段索要标准答案时，礼貌拒绝，把学生拉回当前阶段继续思考。";
+
+let currentStep = 0;
+let editor;
+const tagWrap = document.getElementById("stepTags");
+const stageHint = document.getElementById("stageHint");
+const aiOutput = document.getElementById("aiOutput");
+
+STEP_INFO.forEach((item, idx)=>{
+  const d = document.createElement("div");
+  d.className = "tag" + (idx === 0 ? " active" : "");
+  d.innerText = item.split(" —— ")[0];
+  d.onclick = ()=>{
+    currentStep = idx;
+    document.querySelectorAll(".tag").forEach(t=>t.classList.remove("active"));
+    d.classList.add("active");
+    stageHint.innerText = "当前阶段：" + STEP_INFO[idx];
+  }
+  tagWrap.appendChild(d);
+})
+
+editor = CodeMirror.fromTextArea(document.getElementById("codeEditor"),{
+  mode:"text/x-c++src",
+  theme:"dracula",
+  lineNumbers:true,
+  matchBrackets:true,
+  extraKeys:{"Ctrl-/":"toggleComment"}
+});
+editor.setValue(`// 在这里写你的代码...
+#include <iostream>
+using namespace std;
+
+int main() {
+    return 0;
+}`);
+
+async function checkOllama(){
+  const el = document.getElementById("ollamaStatus");
+  try{
+    const res = await fetch("http://127.0.0.1:11434/api/tags");
+    if(!res.ok) throw new Error();
+    const json = await res.json();
+    el.innerText = "Ollama 在线 · " + (json.models?.[0]?.name || MODEL_NAME);
+    el.classList.remove("offline");
+  }catch(e){
+    el.innerText = "Ollama 离线";
+    el.classList.add("offline");
+  }
+}
+checkOllama();
+setInterval(checkOllama,8000);
+
+document.getElementById("sendBtn").onclick = async ()=>{
+  aiOutput.innerText = "";
+  const problem = document.getElementById("problemText").innerText.trim();
+  const code = editor.getValue();
+  const stageDesc = STEP_INFO[currentStep];
+  const prompt = `【当前阶段】${stageDesc}
+【题目】
+${problem}
+【学生代码】
+${code}`;
+  const fullPrompt = SYSTEM_TEXT + "\n\n" + prompt;
+  try{
+    const resp = await fetch(OLLAMA_URL,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({model:MODEL_NAME,prompt:fullPrompt,stream:true})
+    })
+    if(!resp.ok){
+      aiOutput.innerText = "请求出错";
+      return;
+    }
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buf = "";
+    while(true){
+      const {done,value} = await reader.read();
+      if(done) break;
+      buf += decoder.decode(value,{stream:true});
+      const lines = buf.split("\n");
+      buf = lines.pop();
+      for(const line of lines){
+        if(!line.trim()) continue;
+        try{
+          const obj = JSON.parse(line);
+          aiOutput.innerText += obj.response;
+          aiOutput.scrollTop = aiOutput.scrollHeight;
+        }catch(e){}
+      }
+    }
+  }catch(err){
+    aiOutput.innerText = "无法连接 Ollama";
+  }
+}
+
+document.getElementById("saveBtn").onclick = ()=>{
+  const pid = document.getElementById("problemId").value || "未命名";
+  const recList = document.getElementById("recordList");
+  const div = document.createElement("div");
+  div.className = "record-item";
+  div.innerHTML = `<strong>${pid}</strong> · ${new Date().toLocaleString()}`;
+  recList.prepend(div);
+}
+</script>
+</body>
+</html>
